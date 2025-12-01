@@ -59,12 +59,13 @@ elif page == "Test":
 
     #Allow quick navigation bar for progress
     st.write(f"Question {q_index+1} of {total_q}")
+    
+    # --- FIXED: use q_index instead of current_index ---
     q = QUESTIONS[q_index]
 
     # --- TYPING EFFECT FOR QUESTION TEXT ---
     placeholder = st.empty()
     typed_key = f"typed_{q_index}"
-
     if not st.session_state.get(typed_key, False):
         with placeholder.container():
             typing_print_lines(q["text"].split("\n"))
@@ -72,11 +73,9 @@ elif page == "Test":
     else:
         placeholder.write(q["text"])
 
-
     # --- ANSWER AREA ---
     answer_key = f"q_{q_index}"
 
-    #Handle Different Question Types
     if q["type"] == "likert":
         options = DEFAULT_OPTIONS
         prev_answer = st.session_state.answers.get(answer_key, None)
@@ -88,15 +87,12 @@ elif page == "Test":
             key=f"{answer_key}_radio"
         )
 
-        #Convert to score 1–5
+        # Convert to score 1–5
         score = options.index(ans) + 1
         st.session_state.answers[answer_key] = score
 
-
     elif q["type"] == "numeric_choice":
-        #Single numeric-choice question
         options = [str(opt) for opt in q["options"]]
-
         prev_answer = st.session_state.answers.get(answer_key, None)
 
         ans = st.radio(
@@ -106,21 +102,17 @@ elif page == "Test":
             key=f"{answer_key}_radio"
         )
 
-        #Score = 1 if correct, else 0
-        correct = q.get("correct")  # add correct key to question in your bank
-        score = 1 if ans == str(correct) else 0
+        # Score = 1 if correct, else 0
+        correct = str(q.get("correct", options[0]))
+        score = 1 if ans == correct else 0
         st.session_state.answers[answer_key] = score
 
-
     elif q["type"] == "numeric_choice_multi":
-        #Two-part sequence question
         options1 = [str(o) for o in q["options_1"]]
         options2 = [str(o) for o in q["options_2"]]
-
-        col1, col2 = st.columns(2)
-
         prev1, prev2 = st.session_state.answers.get(answer_key, (None, None))
 
+        col1, col2 = st.columns(2)
         with col1:
             ans1 = st.radio(
                 "First missing number:",
@@ -128,7 +120,6 @@ elif page == "Test":
                 index=options1.index(prev1) if prev1 in options1 else 0,
                 key=f"{answer_key}_1"
             )
-
         with col2:
             ans2 = st.radio(
                 "Second missing number:",
@@ -137,31 +128,27 @@ elif page == "Test":
                 key=f"{answer_key}_2"
             )
 
-        #Score both parts
-        correct1 = str(q.get("correct_1"))
-        correct2 = str(q.get("correct_2"))
-        score = int(ans1 == correct1) + int(ans2 == correct2)
-
-        st.session_state.answers[answer_key] = (ans1, ans2)
-
+        # Store as tuple of integers for safe scoring
+        st.session_state.answers[answer_key] = (int(ans1), int(ans2))
 
     # --- NAVIGATION BUTTONS ---
     cols = st.columns([1, 1, 1])
-
     if cols[0].button("Back"):
         if q_index > 0:
             st.session_state.progress["current_q"] = q_index - 1
             st.rerun()
-
     if cols[2].button("Next"):
         if q_index < total_q - 1:
             st.session_state.progress["current_q"] = q_index + 1
             st.rerun()
         else:
             st.session_state.submitted = True
+            # --- now safe to calculate scores ---
             st.session_state.scores = calculate_scores(st.session_state.answers, QUESTIONS)
             st.success("Test submitted — opening results…")
             st.rerun()
+
+
 
 #Page 4 (Results)
 elif page == "Results":
@@ -217,8 +204,9 @@ elif page == "Results":
             name=st.session_state.user.get("name", "Tester"), scores=scores
         )
         st.download_button(
-            label="Download Certificate (PDF)",
-            data=pdf_bytes,
-            file_name=f"IQ_Certificate_{st.session_state.user.get('name','Tester').replace(' ','_')}.pdf",
-            mime="application/pdf",
-        )
+        label="Download Certificate (PDF)",
+        data=pdf_bytes,
+        file_name=f"IQ_Certificate_{st.session_state.user.get('name','Tester').replace(' ','_')}.pdf",
+        mime="application/pdf",
+    )
+
