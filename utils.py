@@ -1,134 +1,212 @@
-import time
 import streamlit as st
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import inch
-from io import BytesIO
+from utils import (
+    QUESTIONS,
+    DEFAULT_OPTIONS,
+    init_session_state,
+    typing_print_lines,
+    calculate_scores,
+    generate_certificate_bytes,
+)
+import io
 
-#Define the question bank. Each question has: text, category
-QUESTIONS = [
-    # Analytical (multiple-choice numeric)
-    {
-        "text": " If a pattern is 2, 4, 8, 16, what comes next?",
-        "category": "Analytical",
-        "type": "numeric_choice",
-        "options": [32, 34, 36, 40]   # number-only options
-    },
+st.set_page_config(page_title="Streamlit IQ Test App", layout="centered")
 
-    {"text": " I can solve logic puzzles quickly.",
-     "category": "Analytical", "type": "likert"},
+#Initialize session state
+init_session_state()
 
-    {
-        "text": " The series has numbers 3, 8, 18, 35, 61, __, __. Find the missing two.",
-        "category": "Analytical",
-        "type": "numeric_choice_multi",
-        "options_1": [92, 95, 101, 105],   #first missing number
-        "options_2": [150, 161, 175, 180]  #second missing number
-    },
+PAGES = ["Introduction", "Register", "Test", "Results"]
+page = st.sidebar.selectbox("Navigate", PAGES)
 
-    #Social
-    {"text": " I feel comfortable understanding how others feel.", "category": "Social", "type": "likert"},
-    {"text": " I often help friends navigate social problems.", "category": "Social", "type": "likert"},
-    {"text": " I prefer working in teams rather than alone.", "category": "Social", "type": "likert"},
+#Page 1 (Introduction)
+if page == "Introduction":
+    st.title("Streamlit IQ Test App")
+    st.markdown(
+        "This app measures five aspects of intelligence: **Analytical**, **Social**, **Moral**, **Symbolic**, and **Creative-Technical**.\n\n"
+        "You'll register your details, answer a short set of questions and receive a results summary and downloadable certificate."
+    )
+    st.markdown("---")
+    st.write("**How it works**")
+    st.write(
+        "You will see one question per page. Use the `Back` and `Next` buttons to move. Your progress is saved in the session so you can come back to where you left off."
+    )
+    st.write(
+        "The test includes questions that target: Analytical, Social, Moral, Symbolic, and Creative-Technical intelligence."
+    )
+    st.info("When you're ready, go to 'Register' in the sidebar to begin.")
 
-    #Moral
-    {"text": " I consider ethical consequences before making decisions.", "category": "Moral", "type": "likert"},
-    {"text": " I stand up for what I believe is right.", "category": "Moral", "type": "likert"},
-    {"text": " I often think about fairness and justice.", "category": "Moral", "type": "likert"},
+#Page 2 (Registration)
+elif page == "Register":
+    st.header("User Registration")
+    with st.form("reg_form"):
+        name = st.text_input("Full name", value=st.session_state.user.get("name", ""))
+        age = st.number_input("Age", min_value=6, max_value=120, value=st.session_state.user.get("age", 18))
+        gender = st.selectbox("Gender", ["Prefer not to say", "Female", "Male", "Non-binary", "Other"], index=0)
+        email = st.text_input("Email", value=st.session_state.user.get("email", ""))
+        submitted = st.form_submit_button("Save")
+        if submitted:
+            st.session_state.user.update({"name": name, "age": int(age), "gender": gender, "email": email})
+            st.success("Saved to session — proceed to the Test page when ready.")
 
-    #Symbolic
-    {"text": " I enjoy puzzles that use symbols and codes.", "category": "Symbolic", "type": "likert"},
-    {"text": " I can interpret maps, charts and abstract diagrams easily.", "category": "Symbolic", "type": "likert"},
-    {"text": " I like to work with languages or symbolic systems.", "category": "Symbolic", "type": "likert"},
+    if st.session_state.user.get("name"):
+        st.markdown("**Saved user:**")
+        st.write(st.session_state.user)
 
-    #Creative-Technical
-    {"text": " I enjoy making things and fixing mechanical problems.", "category": "Creative-Technical", "type": "likert"},
-    {"text": " I come up with novel solutions to technical problems.", "category": "Creative-Technical", "type": "likert"},
-    {"text": " I like designing or building prototypes.", "category": "Creative-Technical", "type": "likert"},
-]
+#Page 3 (Test)
+elif page == "Test":
+    st.header("IQ Test — One question at a time")
+    q_index = st.session_state.progress.get("current_q", 0)
+    total_q = len(QUESTIONS)
 
-DEFAULT_OPTIONS = [
-    "Strongly disagree",
-    "Disagree",
-    "Neutral",
-    "Agree",
-    "Strongly agree"
-]
+    #Allow quick navigation bar for progress
+    st.write(f"Question {q_index+1} of {total_q}")
+    
+    # --- FIXED: use q_index instead of current_index ---
+    q = QUESTIONS[q_index]
 
-#Session initialization
-def init_session_state():
-    if "user" not in st.session_state:
-        st.session_state.user = {}
-    if "answers" not in st.session_state:
-        st.session_state.answers = {}
-    if "progress" not in st.session_state:
-        st.session_state.progress = {"current_q": 0}
-    if "scores" not in st.session_state:
-        st.session_state.scores = {}
-    if "submitted" not in st.session_state:
-        st.session_state.submitted = False
+    # --- TYPING EFFECT FOR QUESTION TEXT ---
+    placeholder = st.empty()
+    typed_key = f"typed_{q_index}"
+    if not st.session_state.get(typed_key, False):
+        with placeholder.container():
+            typing_print_lines(q["text"].split("\n"))
+        st.session_state[typed_key] = True
+    else:
+        placeholder.write(q["text"])
 
-#Typing/printing effect: prints line by line with small delay
-def typing_print_lines(lines, delay=0.03):
-    """
-    lines: list of strings
-    delay: seconds per character (keeps small to avoid long waits)
-    """
-    for line in lines:
-        placeholder = st.empty()
-        txt = ""
-        for ch in line:
-            txt += ch
-            placeholder.markdown(txt + "\n")
-            time.sleep(delay)
-        #small pause at the end of each line
-        time.sleep(0.15)
+    # --- ANSWER AREA ---
+    answer_key = f"q_{q_index}"
 
-#Score calculation: aggregate answers by category
-def calculate_scores(answers: dict, questions: list):
-    #Build mapping from q index to category
-    cat_scores = {}
-    cat_counts = {}
-    for idx, q in enumerate(questions):
-        key = f"q_{idx}"
-        score = answers.get(key, 3)  #default neutral if missing
-        cat = q["category"]
-        cat_scores[cat] = cat_scores.get(cat, 0) + score
-        cat_counts[cat] = cat_counts.get(cat, 0) + 1
+    if q["type"] == "likert":
+        options = DEFAULT_OPTIONS
+        prev_answer = st.session_state.answers.get(answer_key, None)
 
-    #average per category
-    avg_scores = {cat: (cat_scores[cat] / cat_counts[cat]) for cat in cat_scores}
-    return avg_scores
+        ans = st.radio(
+            "Your answer:",
+            options,
+            index=options.index(prev_answer) if prev_answer in options else 2,
+            key=f"{answer_key}_radio"
+        )
 
-#Generate a PDF certificate and return bytes(using reportlab)
-#def generate_certificate_bytes(name: str, scores: dict):
-#buffer = BytesIO()
-def generate_certificate_bytes(name: str, scores: dict):
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.pagesizes import letter
-    from io import BytesIO
+        # Convert to score 1–5
+        score = options.index(ans) + 1
+        st.session_state.answers[answer_key] = score
 
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
+    elif q["type"] == "numeric_choice":
+        options = [str(opt) for opt in q["options"]]
+        prev_answer = st.session_state.answers.get(answer_key, None)
 
-    #Certificate content
-    c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(width / 2, height - 1.5 * 72, "Certificate of Assessment")
-    c.setFont("Helvetica", 14)
-    c.drawCentredString(width / 2, height - 1.9 * 72, "Awarded to")
-    c.setFont("Helvetica-Bold", 20)
-    c.drawCentredString(width / 2, height - 2.4 * 72, name)
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(width / 2, height - 2.8 * 72, "Tested with Streamlit IQ Test App")
+        ans = st.radio(
+            "Choose the correct number:",
+            options,
+            index=options.index(prev_answer) if prev_answer in options else 0,
+            key=f"{answer_key}_radio"
+        )
 
-    #Draw scores
-    y = height - 3.4 * 72
-    for cat, val in scores.items():
-        c.drawString(72, y, f"{cat}: {val:.2f} / 5")
-        y -= 0.3 * 72
+        # Score = 1 if correct, else 0
+        correct = str(q.get("correct", options[0]))
+        score = 1 if ans == correct else 0
+        st.session_state.answers[answer_key] = score
 
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer.getvalue()  #Make sure to return bytes
+    elif q["type"] == "numeric_choice_multi":
+        options1 = [str(o) for o in q["options_1"]]
+        options2 = [str(o) for o in q["options_2"]]
+        prev1, prev2 = st.session_state.answers.get(answer_key, (None, None))
+
+        col1, col2 = st.columns(2)
+        with col1:
+            ans1 = st.radio(
+                "First missing number:",
+                options1,
+                index=options1.index(prev1) if prev1 in options1 else 0,
+                key=f"{answer_key}_1"
+            )
+        with col2:
+            ans2 = st.radio(
+                "Second missing number:",
+                options2,
+                index=options2.index(prev2) if prev2 in options2 else 0,
+                key=f"{answer_key}_2"
+            )
+
+        # Store as tuple of integers for safe scoring
+        st.session_state.answers[answer_key] = (int(ans1), int(ans2))
+
+    # --- NAVIGATION BUTTONS ---
+    cols = st.columns([1, 1, 1])
+    if cols[0].button("Back"):
+        if q_index > 0:
+            st.session_state.progress["current_q"] = q_index - 1
+            st.rerun()
+    if cols[2].button("Next"):
+        if q_index < total_q - 1:
+            st.session_state.progress["current_q"] = q_index + 1
+            st.rerun()
+        else:
+            st.session_state.submitted = True
+            # --- now safe to calculate scores ---
+            st.session_state.scores = calculate_scores(st.session_state.answers, QUESTIONS)
+            st.success("Test submitted — opening results…")
+            st.rerun()
+
+
+
+#Page 4 (Results)
+elif page == "Results":
+    if not st.session_state.get("submitted", False):
+        st.info("You haven't submitted the test yet. Go to 'Test' and finish to see results.")
+    else:
+        st.header("Results")
+        #Simple blossom animation using HTML/CSS + balloons
+        st.markdown("""
+        <div style='text-align:center;'>
+        <div class='flower'></div>
+        </div>
+        <style>
+        .flower{margin:20px auto;width:120px;height:120px;border-radius:50%;position:relative;}
+        .flower:before,.flower:after{content:'';position:absolute;width:60px;height:60px;border-radius:50%;background: radial-gradient(circle at 30% 30%, #ff9a9e, #fad0c4);opacity:0.9;animation:blossom 1.8s ease-in-out infinite;}
+        .flower:before{left:0;transform-origin:60px 30px}
+        .flower:after{right:0;transform-origin:0px 30px}
+        @keyframes blossom{0%{transform:scale(0.2) rotate(0)}50%{transform:scale(1.02) rotate(10deg)}100%{transform:scale(0.95) rotate(0deg)}}
+        </style>
+        """, unsafe_allow_html=True)
+        st.balloons()
+
+        #Show computed scores
+        scores = st.session_state.scores
+        st.subheader(f"Hi {st.session_state.user.get('name', 'Tester')} — here are your scores")
+        for cat, val in scores.items():
+            st.metric(label=cat, value=f"{val:.1f}")
+
+        #Short personalized analysis
+        strongest = max(scores, key=scores.get)
+        weakest = min(scores, key=scores.get)
+        st.markdown("**Summary**")
+        st.write(
+            f"Nice work, {st.session_state.user.get('name', 'friend')}! You show strong {strongest} intelligence — that's a natural strength. "
+            f"You may want to focus on improving {weakest} through targeted activities. Overall, keep exploring and building on your strengths."
+        )
+
+        #Suggest careers (basic rule-based suggestions)
+        st.markdown("**Suggested career paths**")
+        suggestions = {
+            "Analytical": ["Data Scientist", "Engineer", "Research Analyst"],
+            "Social": ["Counselor", "Teacher", "PR Specialist"],
+            "Moral": ["Social Worker", "Ethics Officer", "NGO Coordinator"],
+            "Symbolic": ["Designer", "Mathematician", "Cryptographer"],
+            "Creative-Technical": ["Product Designer", "Inventor", "Creative Technologist"],
+        }
+        st.write(", ".join(suggestions.get(strongest, [])))
+
+        #Download certificate
+        st.markdown("---")
+        st.write("Download your certificate below")
+        pdf_bytes = generate_certificate_bytes(
+            name=st.session_state.user.get("name", "Tester"), scores=scores
+        )
+        st.download_button(
+        label="Download Certificate (PDF)",
+        data=pdf_bytes,
+        file_name=f"IQ_Certificate_{st.session_state.user.get('name','Tester').replace(' ','_')}.pdf",
+        mime="application/pdf",
+    )
+
