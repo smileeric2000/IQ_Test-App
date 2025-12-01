@@ -81,4 +81,6 @@ As this app grows, here are some areas I would love to enhance:
 ---
 
 ## 📁 File Structure
-
+IQ_TEST.py  (Main app)
+utils.py   (major functions)
+requirements.txt    (Dependencies)
