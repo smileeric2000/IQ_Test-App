@@ -1,6 +1,7 @@
 import streamlit as st
 from utils import (
     QUESTIONS,
+    DEFAULT_OPTIONS,
     init_session_state,
     typing_print_lines,
     calculate_scores,
@@ -21,7 +22,7 @@ if page == "Introduction":
     st.title("Streamlit IQ Test App")
     st.markdown(
         "This app measures five aspects of intelligence: **Analytical**, **Social**, **Moral**, **Symbolic**, and **Creative-Technical**.\n\n"
-        "You'll register your details, answer a short set of questions (one per page) and receive a friendly results summary and downloadable certificate."
+        "You'll register your details, answer a short set of questions and receive a results summary and downloadable certificate."
     )
     st.markdown("---")
     st.write("**How it works**")
@@ -60,41 +61,106 @@ elif page == "Test":
     st.write(f"Question {q_index+1} of {total_q}")
     q = QUESTIONS[q_index]
 
-    #Typing effect for question text
+    # --- TYPING EFFECT FOR QUESTION TEXT ---
     placeholder = st.empty()
-    if not st.session_state.get("typed_" + str(q_index), False):
+    typed_key = f"typed_{q_index}"
+
+    if not st.session_state.get(typed_key, False):
         with placeholder.container():
             typing_print_lines(q["text"].split("\n"))
-        st.session_state["typed_" + str(q_index)] = True
+        st.session_state[typed_key] = True
     else:
         placeholder.write(q["text"])
 
-    #Show options (Likert style)
-    options = q.get("options", ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"])
+
+    # --- ANSWER AREA ---
     answer_key = f"q_{q_index}"
-    prev = st.session_state.answers.get(answer_key, 3)
-    ans = st.radio("Your answer:", options, index=prev-1, key=answer_key+"_radio")
 
-    #Map selection to score 1-5
-    score = options.index(ans) + 1
+    #Handle Different Question Types
+    if q["type"] == "likert":
+        options = DEFAULT_OPTIONS
+        prev_answer = st.session_state.answers.get(answer_key, None)
 
-    #Save the score into session
-    st.session_state.answers[answer_key] = score
+        ans = st.radio(
+            "Your answer:",
+            options,
+            index=options.index(prev_answer) if prev_answer in options else 2,
+            key=f"{answer_key}_radio"
+        )
 
+        #Convert to score 1–5
+        score = options.index(ans) + 1
+        st.session_state.answers[answer_key] = score
+
+
+    elif q["type"] == "numeric_choice":
+        #Single numeric-choice question
+        options = [str(opt) for opt in q["options"]]
+
+        prev_answer = st.session_state.answers.get(answer_key, None)
+
+        ans = st.radio(
+            "Choose the correct number:",
+            options,
+            index=options.index(prev_answer) if prev_answer in options else 0,
+            key=f"{answer_key}_radio"
+        )
+
+        #Score = 1 if correct, else 0
+        correct = q.get("correct")  # add correct key to question in your bank
+        score = 1 if ans == str(correct) else 0
+        st.session_state.answers[answer_key] = score
+
+
+    elif q["type"] == "numeric_choice_multi":
+        #Two-part sequence question
+        options1 = [str(o) for o in q["options_1"]]
+        options2 = [str(o) for o in q["options_2"]]
+
+        col1, col2 = st.columns(2)
+
+        prev1, prev2 = st.session_state.answers.get(answer_key, (None, None))
+
+        with col1:
+            ans1 = st.radio(
+                "First missing number:",
+                options1,
+                index=options1.index(prev1) if prev1 in options1 else 0,
+                key=f"{answer_key}_1"
+            )
+
+        with col2:
+            ans2 = st.radio(
+                "Second missing number:",
+                options2,
+                index=options2.index(prev2) if prev2 in options2 else 0,
+                key=f"{answer_key}_2"
+            )
+
+        #Score both parts
+        correct1 = str(q.get("correct_1"))
+        correct2 = str(q.get("correct_2"))
+        score = int(ans1 == correct1) + int(ans2 == correct2)
+
+        st.session_state.answers[answer_key] = (ans1, ans2)
+
+
+    # --- NAVIGATION BUTTONS ---
     cols = st.columns([1, 1, 1])
+
     if cols[0].button("Back"):
         if q_index > 0:
             st.session_state.progress["current_q"] = q_index - 1
             st.rerun()
+
     if cols[2].button("Next"):
         if q_index < total_q - 1:
             st.session_state.progress["current_q"] = q_index + 1
             st.rerun()
         else:
-            #Final submission
             st.session_state.submitted = True
             st.session_state.scores = calculate_scores(st.session_state.answers, QUESTIONS)
-            st.success("Test submitted — opening results...")
+            st.success("Test submitted — opening results…")
             st.rerun()
 
 #Page 4 (Results)

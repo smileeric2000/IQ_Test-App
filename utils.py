@@ -7,30 +7,53 @@ from io import BytesIO
 
 #Define the question bank. Each question has: text, category
 QUESTIONS = [
-    {"text": "(Analytical) If a pattern is 2, 4, 8, 16, what comes next? 36 ?", "category": "Analytical"},
-    {"text": "(Analytical) I can solve logic puzzles quickly.", "category": "Analytical"},
-    {"text": "(Analytical) I serie has numbers 3,8 , 18, 35, 61, __, __. find the missing two.", "category": "Analytical" },
+    # Analytical (multiple-choice numeric)
+    {
+        "text": " If a pattern is 2, 4, 8, 16, what comes next?",
+        "category": "Analytical",
+        "type": "numeric_choice",
+        "options": [32, 34, 36, 40]   # number-only options
+    },
 
+    {"text": " I can solve logic puzzles quickly.",
+     "category": "Analytical", "type": "likert"},
 
-    {"text": "(Social) I feel comfortable understanding how others feel.", "category": "Social"},
-    {"text": "(Social) I often help friends navigate social problems.", "category": "Social"},
-    {"text": "(Social) I prefer working in teams rather than alone.", "category": "Social"},
+    {
+        "text": " The series has numbers 3, 8, 18, 35, 61, __, __. Find the missing two.",
+        "category": "Analytical",
+        "type": "numeric_choice_multi",
+        "options_1": [92, 95, 101, 105],   #first missing number
+        "options_2": [150, 161, 175, 180]  #second missing number
+    },
 
-    {"text": "(Moral) I consider ethical consequences before making decisions.", "category": "Moral"},
-    {"text": "(Moral) I stand up for what I believe is right.", "category": "Moral"},
-    {"text": "(Moral) I often think about fairness and justice.", "category": "Moral"},
+    #Social
+    {"text": " I feel comfortable understanding how others feel.", "category": "Social", "type": "likert"},
+    {"text": " I often help friends navigate social problems.", "category": "Social", "type": "likert"},
+    {"text": " I prefer working in teams rather than alone.", "category": "Social", "type": "likert"},
 
-    {"text": "(Symbolic) I enjoy puzzles that use symbols and codes.", "category": "Symbolic"},
-    {"text": "(Symbolic) I can interpret maps, charts and abstract diagrams easily.", "category": "Symbolic"},
-    {"text": "(Symbolic) I like to work with languages or symbolic systems.", "category": "Symbolic"},
+    #Moral
+    {"text": " I consider ethical consequences before making decisions.", "category": "Moral", "type": "likert"},
+    {"text": " I stand up for what I believe is right.", "category": "Moral", "type": "likert"},
+    {"text": " I often think about fairness and justice.", "category": "Moral", "type": "likert"},
 
-    {"text": "(Creative-Technical) I enjoy making things and fixing mechanical problems.", "category": "Creative-Technical"},
-    {"text": "(Creative-Technical) I come up with novel solutions to technical problems.", "category": "Creative-Technical"},
-    {"text": "(Creative-Technical) I like designing or building prototypes.", "category": "Creative-Technical"},
+    #Symbolic
+    {"text": " I enjoy puzzles that use symbols and codes.", "category": "Symbolic", "type": "likert"},
+    {"text": " I can interpret maps, charts and abstract diagrams easily.", "category": "Symbolic", "type": "likert"},
+    {"text": " I like to work with languages or symbolic systems.", "category": "Symbolic", "type": "likert"},
+
+    #Creative-Technical
+    {"text": " I enjoy making things and fixing mechanical problems.", "category": "Creative-Technical", "type": "likert"},
+    {"text": " I come up with novel solutions to technical problems.", "category": "Creative-Technical", "type": "likert"},
+    {"text": " I like designing or building prototypes.", "category": "Creative-Technical", "type": "likert"},
 ]
 
-#default options (Likert)
-DEFAULT_OPTIONS = ["Strongly disagree", "Disagree", "Neutral", "Agree", "Strongly agree"]
+DEFAULT_OPTIONS = [
+    "Strongly disagree",
+    "Disagree",
+    "Neutral",
+    "Agree",
+    "Strongly agree"
+]
 
 #Session initialization
 def init_session_state():
